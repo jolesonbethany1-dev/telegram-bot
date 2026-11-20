@@ -510,6 +510,8 @@ export interface PollerDeps {
    * set. May reject.
    */
   send: (text: string, source?: ContractSource, extra?: SendExtra) => Promise<void>;
+  /** Receives each decoded event read from the chain, before delivery is attempted. */
+  onDecodedEvent?: ((event: DecodedEvent) => void) | undefined;
   /**
    * Optional direct notification hook for the operator (e.g. restart gaps).
    * Plain-text message sent to the operator's private chat.
@@ -2676,6 +2678,9 @@ export function createPoller(deps: PollerDeps) {
           // key (it carries no `topic`), and an id-less event would otherwise
           // never be recorded.
           for (const id of scan.seenEventIds) dedupWindow.add(id);
+          if (deps.onDecodedEvent !== undefined) {
+            for (const event of scan.events) deps.onDecodedEvent(event);
+          }
           if (scan.events.length > 0) {
             markDirty();
             delivery = await notify(scan.events, correlationId);

@@ -18,6 +18,8 @@ import {
 } from "./activity-baseline.js";
 import { configProvenance, networkLabel, type BotConfig, type ConfigProvenance } from "./config.js";
 import type { LogCapture } from "./logger.js";
+import type { DecodedEvent } from "./stellar/decode.js";
+import { buildAtomFeed } from "./stellar/feed.js";
 import { safeErrorMessage } from "./notifications/format.js";
 import type { PollerStatus } from "./poller.js";
 import { redactText } from "./redact.js";
@@ -31,6 +33,8 @@ export interface HealthDeps {
   now?: () => number;
   /** Optional handler for Telegram webhook mode (POST /telegram-webhook). */
   webhookHandler?: ((req: http.IncomingMessage, res: http.ServerResponse) => void) | undefined;
+  /** Retained decoded events served by the opt-in read-only Atom route. */
+  atomEvents?: (() => readonly DecodedEvent[]) | undefined;
   /**
    * Optional provenance reader for deterministic tests. Defaults to
    * {@link configProvenance}; either way only key names and origins are served.
@@ -525,12 +529,42 @@ export function startHealthServer(deps: HealthDeps): HealthServer {
       return;
     }
 
+    if (config.atomFeedEnabled && url.pathname === "/atom") {
+      if (method !== "GET") {
+        res.writeHead(405, {
+          allow: "GET",
+          "cache-control": "no-store",
+          "content-length": "0",
+        });
+        res.end();
+        return;
+      }
+      const cap = config.atomFeedMaxEntries > 0 ? config.atomFeedMaxEntries : 50;
+      const retained = deps.atomEvents?.() ?? [];
+      const events = retained.slice(-cap);
+      const selfUrl =
+        config.atomFeedSelfUrl ?? `http://${config.healthHost}:${config.healthPort}/atom`;
+      const xml = buildAtomFeed(events, {
+        title: `Mimir Events (${networkLabel(config)})`,
+        selfUrl,
+        config,
+      });
+      res.writeHead(200, {
+        "content-type": "application/atom+xml; charset=utf-8",
+        "cache-control": "no-store",
+        "content-length": Buffer.byteLength(xml),
+      });
+      res.end(xml);
+      return;
+    }
+
     if (method === "GET" && url.pathname === "/") {
       sendJson(res, 200, {
         service: "mimir-telegram-bot",
         health: "/health",
         live: "/health/live",
         metrics: "/metrics",
+        ...(config.atomFeedEnabled ? { atom: "/atom" } : {}),
       });
       return;
     }
@@ -550,6 +584,7 @@ export function startHealthServer(deps: HealthDeps): HealthServer {
   const url = `http://${config.healthHost}:${port}`;
   console.log(
     `[health] listening on ${url} (GET /health, GET /health/live` +
+      `${config.atomFeedEnabled ? ", GET /atom" : ""}` +
       `${logs && logs.capacity() > 0 ? ", GET /health/diag" : ""})`,
   );
 

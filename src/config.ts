@@ -306,6 +306,12 @@ export interface BotConfig extends StellarConfig {
   mimirAppUrl: string | null;
   /** Optional bearer token for health endpoint authentication. Null disables auth. */
   healthAuthToken: string | null;
+  /** Enables the read-only Atom feed route on the health listener. */
+  atomFeedEnabled: boolean;
+  /** Maximum decoded events retained in memory for the Atom feed. */
+  atomFeedMaxEntries: number;
+  /** Optional public https URL used as the feed's self link. */
+  atomFeedSelfUrl: string | null;
 }
 
 /** Fallback drain budget when a config object predates `SHUTDOWN_TIMEOUT_MS`. */
@@ -372,6 +378,8 @@ const DEFAULTS = {
   // an outage that lasts for hours.
   logSampleWindowMs: 300_000,
   logBufferLines: 500,
+  atomFeedEnabled: false,
+  atomFeedMaxEntries: 50,
 } as const;
 
 /**
@@ -974,6 +982,9 @@ export function loadConfig(): BotConfig {
     telegramApiRoot: c.loopbackApiRoot("TELEGRAM_API_ROOT"),
     mimirAppUrl: c.optionalHttpsUrl("MIMIR_APP_URL"),
     healthAuthToken: c.optionalSecret("HEALTH_AUTH_TOKEN"),
+    atomFeedEnabled: c.bool("ATOM_FEED_ENABLED", DEFAULTS.atomFeedEnabled),
+    atomFeedMaxEntries: c.int("ATOM_FEED_MAX_ENTRIES", DEFAULTS.atomFeedMaxEntries, 1),
+    atomFeedSelfUrl: c.optionalHttpsUrl("ATOM_FEED_SELF_URL"),
   };
 
   if (c.problems.length > 0) throw new ConfigError(c.problems);
@@ -982,9 +993,13 @@ export function loadConfig(): BotConfig {
   if (config.healthPort !== 0 && !isLoopback(config.healthHost) && config.healthAuthToken === null) {
     console.warn(
       `[config] HEALTH_HOST=${config.healthHost} is non-loopback but HEALTH_AUTH_TOKEN is not set. ` +
-        `Health and metrics will be accessible without authentication. ` +
+        `Health, metrics, and any enabled Atom feed will be accessible without authentication. ` +
         `Set HEALTH_AUTH_TOKEN to protect these endpoints.`,
     );
+  }
+
+  if (config.atomFeedEnabled && config.healthPort === 0) {
+    console.warn("[config] ATOM_FEED_ENABLED=true but HEALTH_PORT=0; the Atom feed will not be served.");
   }
 
   return config;
@@ -1145,6 +1160,9 @@ export const CONFIG_KEYS: readonly ConfigKeySpec[] = [
   },
   { key: "HEALTH_STALE_MS", secret: false, hasBuiltInDefault: true },
   { key: "HEALTH_AUTH_TOKEN", secret: true },
+  { key: "ATOM_FEED_ENABLED", secret: false, hasBuiltInDefault: true },
+  { key: "ATOM_FEED_MAX_ENTRIES", secret: false, hasBuiltInDefault: true },
+  { key: "ATOM_FEED_SELF_URL", secret: false },
   { key: "STARTUP_HEALTH_DEADLINE_MS", secret: false, hasBuiltInDefault: true },
   { key: "STARTUP_HEALTH_RETRY_MS", secret: false, hasBuiltInDefault: true },
   { key: "SHUTDOWN_TIMEOUT_MS", secret: false, hasBuiltInDefault: true },

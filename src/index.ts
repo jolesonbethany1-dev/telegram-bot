@@ -28,6 +28,7 @@ import { createBot, createNotifier, registerCommands, type SendExtra } from "./b
 import { startHealthServer } from "./health.js";
 import { createPoller, waitForStartupHealth } from "./poller.js";
 import type { ContractSource } from "./stellar/decode.js";
+import { AtomEventRing } from "./stellar/feed.js";
 import { safeErrorMessage } from "./notifications/format.js";
 import { createRpcServer, validateNetworkPassphrase } from "./stellar/client.js";
 import { createMetrics } from "./metrics.js";
@@ -246,6 +247,7 @@ async function main(): Promise<void> {
     throw new Error("telegram notifier not ready");
   };
 
+  const atomEvents = new AtomEventRing(config.atomFeedMaxEntries);
   const audit = createAuditLog();
   audit.record(
     auditEntry("boot", {
@@ -256,6 +258,7 @@ async function main(): Promise<void> {
     config,
     server,
     send: (text, source, extra) => notify(text, source, extra),
+    onDecodedEvent: config.atomFeedEnabled ? (event) => atomEvents.push(event) : undefined,
     notifyOperator: config.operatorTelegramUserId
       ? async (text: string) => {
           await bot.api.sendMessage(config.operatorTelegramUserId!, text);
@@ -284,6 +287,7 @@ async function main(): Promise<void> {
     config,
     status: () => poller.status(),
     logs: logCapture,
+    atomEvents: () => atomEvents.snapshot(),
     webhookHandler:
       webhookSecret !== null
         ? webhookCallback(bot, "http", { secretToken: webhookSecret })

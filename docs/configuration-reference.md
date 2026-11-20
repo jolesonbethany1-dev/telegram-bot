@@ -40,6 +40,13 @@ The `.env.example` file contains the base configuration. The bot uses strict env
 ### Health Reporting
 - `HEALTH_HOST` & `HEALTH_PORT`: Binds a local HTTP endpoint for health probes (e.g., Kubernetes liveness probes). Set port to 0 to disable.
 - `HEALTH_STALE_MS`: Marks the health endpoint as degraded if no successful poll completes within this window (e.g., 90000ms).
+- `HEALTH_AUTH_TOKEN`: Optional bearer token; all health-lister routes, including the Atom feed, require it when set. Required in practice when binding beyond loopback.
+
+### Read-only Atom Feed
+- `ATOM_FEED_ENABLED`: Enables `GET /atom` on the health listener. Defaults to `false`.
+- `ATOM_FEED_MAX_ENTRIES`: Maximum decoded events retained in memory for the feed (default `50`, minimum `1`). Oldest entries are dropped first.
+- `ATOM_FEED_SELF_URL`: Optional public https URL used as the feed's self link; unset derives a loopback http URL (used as `<id>` only).
+- The feed is read-only, makes no exactly-once delivery claim, and never signs or submits chain transactions. See [HTTP endpoints](http-endpoints.md).
 
 ## Operational Behavior
 

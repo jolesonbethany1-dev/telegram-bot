@@ -22,7 +22,8 @@ with health checks.
 Because both listeners bind `127.0.0.1` by default, any client on the same
 host can read them. If you deploy on a platform that routes probes from a
 different host (container network, Kubernetes pod network, Railway health
-checker) you must change the bind address:
+checker) you must change the bind address. The optional `/atom` route is served
+by the health listener and inherits the same bind and bearer-token rules.
 
 ```dotenv
 HEALTH_HOST=0.0.0.0   # reachable from any interface
@@ -50,9 +51,12 @@ Never returns a non-200.
   "service": "mimir-telegram-bot",
   "health": "/health",
   "live": "/health/live",
-  "metrics": "/metrics"
+  "metrics": "/metrics",
+  "atom": "/atom"
 }
 ```
+
+`atom` appears only when `ATOM_FEED_ENABLED=true`.
 
 ```bash
 curl -s http://127.0.0.1:8787/
@@ -284,6 +288,57 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ---
 
+### `GET /atom` (opt-in, disabled by default)
+
+Read-only [Atom 1.0](https://www.rfc-editor.org/rfc/rfc4287) projection of the
+most recent decoded chain events. It reuses `buildAtomFeed` from
+`src/stellar/feed.ts` and never signs, submits, or mutates chain state.
+
+Enable it with `ATOM_FEED_ENABLED=true`. The route lives on the health listener,
+so it inherits `HEALTH_HOST`, `HEALTH_PORT`, and `HEALTH_AUTH_TOKEN`: a non-loopback
+bind still needs a bearer token, and the same `Authorization: Bearer <token>`
+header is required on this route. `HEALTH_PORT=0` disables the listener and
+therefore the feed.
+
+At most `ATOM_FEED_MAX_ENTRIES` events (default `50`) are retained in memory;
+the oldest are dropped first. Retention is independent of notification delivery,
+so a failed Telegram send does not remove an event from the feed. The feed is a
+best-effort, process-local view — the Stellar ledger remains authoritative and
+the feed makes no exactly-once claim. An empty feed is served before the first
+event arrives, with zero `<entry>` elements.
+
+**Response — 200**, `Content-Type: application/atom+xml; charset=utf-8`
+
+```bash
+curl -s http://127.0.0.1:8787/atom
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="text">Mimir Events (testnet)</title>
+  <id>http://127.0.0.1:8787/atom</id>
+  <updated>2026-11-20T12:00:00.000Z</updated>
+  <entry>
+    <title type="text">mimir-market: claim_created</title>
+    <id>tag:mimir,event:Test%20SDF%20Network%20%3B%20September%202015:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB:1234-0</id>
+    <updated>2026-11-20T12:00:00.000Z</updated>
+    <link rel="alternate" type="text/html" href="https://stellar.expert/explorer/testnet/tx/abc"/>
+    <content type="text">Claim #7 created in crypto</content>
+  </entry>
+</feed>
+```
+
+A loopback `http://` self URL is escaped into `<id>` but produces no
+`<link rel="self">` (the builder only emits https self links). Set
+`ATOM_FEED_SELF_URL` to a public https URL when a reverse proxy exposes the feed.
+
+**Response — 404** when `ATOM_FEED_ENABLED` is false.
+**Response — 405** with `Allow: GET` for non-GET methods while enabled.
+**Response — 401** when a bearer token is configured and the request lacks it.
+
+---
+
 ### `GET <any other path>`
 
 **Response — 404**
@@ -373,6 +428,8 @@ methods (`Allow: GET` header set).
 | Health | GET | `/health/live` | 200 | Liveness only (no poller state) |
 | Health | GET | `/livez` | 200 | Alias for `/health/live` |
 | Health | GET | `/metrics` | 200 | Prometheus text (poller-level) |
+| Health | GET | `/atom` | 200, 401, 404 | Bounded read-only Atom feed (`ATOM_FEED_ENABLED` only) |
+| Health | non-GET | `/atom` | 401, 405 | Read-only: `Allow: GET` when enabled |
 | Health | POST | `/telegram-webhook` | 200, 401, 404 | Webhook updates (webhook mode only) |
 | Health | GET | `<other>` | 404 | — |
 | Metrics | GET | `/metrics` | 200 | Prometheus text (registry-level) |
@@ -389,6 +446,9 @@ methods (`Allow: GET` header set).
 | `HEALTH_HOST` | `127.0.0.1` | Bind address for the health server |
 | `HEALTH_PORT` | `8787` (or `PORT` if set by platform) | TCP port; `0` disables the listener |
 | `HEALTH_STALE_MS` | `90000` | `/health` returns 503 if no successful poll within this window |
+| `ATOM_FEED_ENABLED` | `false` | Enables the read-only `GET /atom` route on the health listener |
+| `ATOM_FEED_MAX_ENTRIES` | `50` | Maximum decoded events retained for the feed (minimum 1) |
+| `ATOM_FEED_SELF_URL` | _(unset)_ | Optional public https URL used as the feed's `<link rel="self">` |
 | `METRICS_PORT` | _(unset — disabled)_ | TCP port for the separate metrics server; omit to disable |
 
 See [configuration-reference.md](configuration-reference.md) for all

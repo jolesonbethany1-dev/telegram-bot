@@ -1023,6 +1023,7 @@ proxy requirements, secret lifecycle, verification, and rollback steps.
 | `GET /health` (alias `/healthz`) | Readiness-style status. `200` when the poller is running and healthy, including an intentional operator pause; `503` when stopped or degraded (repeated RPC failures or a stale success window). The response includes `poller.paused` and `poller.suppressedLogs`. |
 | `GET /health/live` (alias `/livez`) | Liveness only — the process and HTTP server are up. Always `200` while listening. |
 | `GET /health/diag` | The same report `/export` produces in the chat, as plain text. `404` when log capture is off. For an operator with host access but no seat in the chat. |
+| `GET /atom` | Opt-in (`ATOM_FEED_ENABLED=true`), read-only Atom 1.0 feed of the most recent decoded events, bounded by `ATOM_FEED_MAX_ENTRIES`. `404` while disabled, `405` for non-GET. Inherits the health listener's bind address and bearer token. See [HTTP endpoints](docs/http-endpoints.md). |
 
 **Container Healthcheck:** A dedicated CLI probe is available for Docker `HEALTHCHECK` or Kubernetes `exec` probes. It reads the same environment variables and exits `0` on success:
 ```bash
@@ -1097,6 +1098,9 @@ Configuration (see `.env.example`):
 - `HEALTH_HOST` — bind address (default `127.0.0.1`; set to `0.0.0.0` for Docker)
 - `HEALTH_PORT` — TCP port (default `8787`; `0` disables)
 - `HEALTH_STALE_MS` — degraded if no successful poll within this window after the first success (default `90000`; `0` disables)
+- `ATOM_FEED_ENABLED` — enable the read-only `GET /atom` feed (default `false`)
+- `ATOM_FEED_MAX_ENTRIES` — maximum decoded events retained for that feed (default `50`, minimum `1`)
+- `ATOM_FEED_SELF_URL` — optional public https URL used as the feed's self link (default unset)
 - A stale cursor rejection independently makes `GET /health` return `503` until its target scans successfully; `HEALTH_STALE_MS` does not disable this cursor alert.
 - `STARTUP_HEALTH_DEADLINE_MS` — wall-clock budget for retrying the boot RPC `getHealth()` probe (default `30000`; `0` = single attempt)
 - `STARTUP_HEALTH_RETRY_MS` — delay between failed boot RPC health attempts (default `1000`)

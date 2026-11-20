@@ -262,3 +262,26 @@ export function buildAtomFeed(
   lines.push("</feed>");
   return lines.join("\n");
 }
+
+export class AtomEventRing {
+  private readonly events: DecodedEvent[] = [];
+
+  constructor(readonly capacity: number) {
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      throw new RangeError("AtomEventRing capacity must be a positive integer");
+    }
+  }
+
+  push(event: DecodedEvent): void {
+    this.events.push(event);
+    if (this.events.length > this.capacity) this.events.shift();
+  }
+
+  snapshot(): readonly DecodedEvent[] {
+    return [...this.events];
+  }
+
+  get size(): number {
+    return this.events.length;
+  }
+}
