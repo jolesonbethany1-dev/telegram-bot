@@ -36,6 +36,14 @@ export const COMMAND_DETAILS: Record<string, CommandDetail> = {
     description: "Show the bot version, the Stellar network it watches, and where its source lives.",
     examples: ["/about"],
   },
+  menu: {
+    usage: "/menu",
+    arguments: "None",
+    whoCanRun: "Anyone in allowed chats",
+    operatorOnly: false,
+    description: "Show an interactive navigation menu with buttons for status, contracts, and help.",
+    examples: ["/menu"],
+  },
   status: {
     usage: "/status",
     arguments: "None",
@@ -60,6 +68,14 @@ export const COMMAND_DETAILS: Record<string, CommandDetail> = {
     description: "Display watched Soroban contract addresses (market and squad) with links to Stellar block explorers.",
     examples: ["/contracts"],
   },
+  filters: {
+    usage: "/filters",
+    arguments: "None",
+    whoCanRun: "Anyone in allowed chats",
+    operatorOnly: false,
+    description: "Display active notification filters, global feature flags, category allowlists, and redacted chat routing settings.",
+    examples: ["/filters"],
+  },
   health: {
     usage: "/health",
     arguments: "None",
@@ -75,6 +91,14 @@ export const COMMAND_DETAILS: Record<string, CommandDetail> = {
     operatorOnly: false,
     description: "Preview Telegram channel notification formatting and verify link preview settings for market or squad contracts.",
     examples: ["/preview", "/preview market", "/preview squad"],
+  },
+  categories: {
+    usage: "/categories",
+    arguments: "None",
+    whoCanRun: "Anyone in allowed chats",
+    operatorOnly: false,
+    description: "Display observed claim categories and counts derived from seen events, marking any filtered out by configuration.",
+    examples: ["/categories"],
   },
   pause: {
     usage: "/pause",
